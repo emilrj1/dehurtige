@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hurtigste Scootere – Leaderboard (Firebase + Likes)</title>
+  <meta name="description" content="Leaderboard over de hurtigste scootere. Data i Firebase. Kun admin kan tilføje/slette. Alle loggede brugere kan like (ét like pr. bruger)." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.08); }
+    .hidden { display: none; }
+    .btn { @apply rounded-xl border border-zinc-700 px-3 py-2 hover:border-zinc-500; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
+  <!-- Header -->
+  <header class="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/70 glass">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
+      <img src="/logo.png" onerror="this.style.display='none'" class="h-8 w-8 rounded-lg ring-1 ring-zinc-800" alt="Logo" />
+      <div class="text-xl font-extrabold tracking-tight">Scooter Leaderboard</div>
+      <div class="ml-auto flex items-center gap-2">
+        <span id="adminBadge" class="text-xs rounded-full border border-emerald-700/70 px-2 py-1 text-emerald-300 hidden">ADMIN</span>
+        <button id="googleLoginBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition">Login (Google)</button>
+        <button id="adminLoginBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition" title="Kun til admin fallback (email/password)">Admin login</button>
+        <button id="logoutBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition hidden">Log ud</button>
+        <button id="exportBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition" title="Download JSON (alle kan eksportere)">Export JSON</button>
+        <label id="importLabel" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition cursor-pointer hidden">
+          Import JSON
+          <input id="importInput" type="file" accept="application/json" class="hidden" />
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <!-- Hero / Controls -->
+    <section class="mb-8 grid gap-6 md:grid-cols-3">
+      <div class="md:col-span-2 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <h1 class="text-2xl md:text-3xl font-black mb-2">De hurtigste scootere</h1>
+        <p class="text-zinc-300">Data ligger i <span class="font-semibold">Firebase</span>. Kun <span class="font-semibold">admin</span> kan tilføje eller slette poster. <span class="font-semibold">Alle loggede brugere</span> kan give **ét like pr. rekord**.</p>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <div class="flex items-center gap-2 text-sm">
+            <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span> Verificeret bevis
+          </div>
+          <div class="flex items-center gap-2 text-sm">
+            <span class="inline-block h-2 w-2 rounded-full bg-yellow-500"></span> Link mangler / uverificeret
+          </div>
+        </div>
+      </div>
+      <div class="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <label class="block text-sm font-semibold mb-1" for="search">Søg</label>
+        <input id="search" type="text" placeholder="Søg på fører, scooter, mods, lokation..." class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-500" />
+        <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
+          <button id="sortSpeedBtn" class="rounded-xl border border-zinc-700 px-3 py-2 hover:border-zinc-500">Sortér: Fart ↓</button>
+          <button id="sortLikesBtn" class="rounded-xl border border-zinc-700 px-3 py-2 hover:border-zinc-500">Sortér: Likes</button>
+          <button id="clearBtn" class="rounded-xl border border-zinc-700 px-3 py-2 hover:border-zinc-500 hidden">Ryd alt (admin)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section class="mb-8 overflow-hidden rounded-2xl border border-zinc-800">
+      <div class="overflow-x-auto">
+        <table class="min-w-full bg-zinc-900/30">
+          <thead class="bg-zinc-900/60">
+            <tr class="text-left text-sm uppercase tracking-wide text-zinc-300">
+              <th class="px-4 py-3">#</th>
+              <th class="px-4 py-3">Fører</th>
+              <th class="px-4 py-3">Scooter</th>
+              <th class="px-4 py-3">Mods</th>
+              <th class="px-4 py-3 cursor-pointer" id="speedHeader" title="Klik for at sortere">Topfart (km/t)</th>
+              <th class="px-4 py-3">Likes</th>
+              <th class="px-4 py-3">Bevis</th>
+              <th class="px-4 py-3">Dato</th>
+              <th class="px-4 py-3">Lokation</th>
+              <th class="px-4 py-3">Handling</th>
+            </tr>
+          </thead>
+          <tbody id="tbody" class="divide-y divide-zinc-800"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Add Entry Form (admin only) -->
+    <section id="adminFormSection" class="mb-16 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 hidden">
+      <h2 class="text-xl font-bold mb-3">Tilføj ny rekord (admin)</h2>
+      <form id="addForm" class="grid md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="rider">Fører *</label>
+          <input id="rider" required class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="Navn eller nick" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="scooter">Scooter *</label>
+          <input id="scooter" required class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="Model (fx PGO Hot 50)" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="mods">Mods</label>
+          <input id="mods" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="Variator, cylinder, udstødning..." />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="speed">Topfart (km/t) *</label>
+          <input id="speed" type="number" min="1" max="400" step="0.1" required class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="fx 112.5" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="evidence">Bevis-link</label>
+          <input id="evidence" type="url" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="YouTube, GPS-log, billede..." />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="date">Dato</label>
+          <input id="date" type="date" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="location">Lokation</label>
+          <input id="location" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="By / strækning" />
+        </div>
+        <div class="flex items-end">
+          <button class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 hover:border-zinc-500">Tilføj</button>
+        </div>
+      </form>
+      <p class="text-xs text-zinc-400 mt-3">* Kun admin kan tilføje. Misbrug (fake tider) kan fjernes af admin.</p>
+    </section>
+
+    <!-- Footer -->
+    <footer class="pb-12 text-center text-sm text-zinc-400">
+      Firebase-drevet single-file site med likes. Host som <code>index.html</code> og indsæt din Firebase konfiguration.
+    </footer>
+  </main>
+
+  <script type="module">
+    // ===== Firebase setup =====
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, getCountFromServer } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+    // 1) Udfyld denne config fra dit Firebase-projekt
+  const firebaseConfig = {
+    apiKey: "AIzaSyCTd9LEy6TJI5ktK6r_Pn1jiahbB-rl4-0",
+    authDomain: "scooter-f404c.firebaseapp.com",
+    databaseURL: "https://scooter-f404c-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "scooter-f404c",
+    storageBucket: "scooter-f404c.firebasestorage.app",
+    messagingSenderId: "717023125803",
+    appId: "1:717023125803:web:59a76dbc983e2ead43656e",
+    measurementId: "G-9CTP8W3SSJ"
+  };
+
+    // 2) Sæt din admin UID her (se i Firebase Console efter første login):
+    const ADMIN_UID = 'DMckhIoixhhMaHs4NNybD7YH9W12';
+
+    // Init
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
+
+    // ===== UI State =====
+    let adminMode = false;
+    let sortDesc = true; // sort by speed desc by default
+    let sortByLikes = false;
+
+    // entries kommer fra Firestore realtime listener
+    /** @type {Array<{id:string,rider:string,scooter:string,mods:string,speed:number,evidence?:string,date?:string,location?:string,created:number, _likes?:number}>} */
+    let entries = [];
+
+    // Ryd gammel localStorage (vi bruger Firebase nu)
+    try { localStorage.removeItem('scooterLeaderboardV1'); } catch {}
+
+ function setAdminUi(on) {
+  adminMode = !!on;
+  document.getElementById('adminBadge').classList.toggle('hidden', !adminMode);
+  document.getElementById('adminLoginBtn').classList.toggle('hidden', adminMode);
+  document.getElementById('importLabel').classList.toggle('hidden', !adminMode);
+  document.getElementById('clearBtn').classList.toggle('hidden', !adminMode);
+  document.getElementById('adminFormSection').classList.toggle('hidden', !adminMode); // 👈 viser/skjuler panelet
+  renderTable(document.getElementById('search').value);
+}
+
+
+    function setAuthUi(user) {
+      const loggedIn = !!user;
+      document.getElementById('googleLoginBtn').classList.toggle('hidden', loggedIn);
+      document.getElementById('logoutBtn').classList.toggle('hidden', !loggedIn);
+      setAdminUi(loggedIn && user.uid === ADMIN_UID);
+    }
+
+    // ===== Firestore realtime: entries =====
+    const entriesRef = collection(db, 'entries');
+    const qSpeed = query(entriesRef, orderBy('speed', 'desc'));
+    onSnapshot(qSpeed, async (snapshot) => {
+      entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Hent like-counts for hver entry (aggregeret count – ikke realtime, men fint her)
+      await refreshAllLikeCounts();
+      renderTable(document.getElementById('search').value);
+    });
+
+    async function refreshAllLikeCounts() {
+      const tasks = entries.map(async (e) => {
+        try {
+          const likesCol = collection(db, 'entries', e.id, 'likes');
+          const agg = await getCountFromServer(likesCol);
+          e._likes = agg.data().count || 0;
+        } catch { e._likes = 0; }
+      });
+      await Promise.all(tasks);
+    }
+
+    // ===== Auth =====
+    onAuthStateChanged(auth, (user) => setAuthUi(user));
+
+    document.getElementById('googleLoginBtn').addEventListener('click', async () => {
+      try { await signInWithPopup(auth, googleProvider); } catch (err) { alert('Google login fejlede: ' + (err?.message||err)); }
+    });
+
+    document.getElementById('adminLoginBtn').addEventListener('click', async () => {
+      const email = prompt('Admin e-mail:');
+      if (!email) return;
+      const pass = prompt('Adgangskode:');
+      if (pass === null) return;
+      try { await signInWithEmailAndPassword(auth, email, pass); } catch (err) { alert('Login fejlede: ' + (err?.message || err)); }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try { await signOut(auth); } catch (e) {}
+    });
+
+    // ===== Helpers =====
+    function formatDate(iso) { if (!iso) return '—'; try { return new Date(iso).toLocaleDateString('da-DK'); } catch { return iso; } }
+    function escapeHtml(str) { return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s])); }
+    function escapeAttr(str) { return String(str).replace(/"/g,'&quot;'); }
+    function isTrustedLink(url) { try { const u = new URL(url); const trustedHosts = ['youtube.com','youtu.be','drive.google.com','imgur.com','gyazo.com','strava.com','garmin.com']; return trustedHosts.some(h => u.hostname.endsWith(h)); } catch { return false; } }
+
+    // ===== Like helpers =====
+    async function hasUserLiked(entryId) {
+      const user = auth.currentUser; if (!user) return false;
+      // Doc id = UID – hvis findes, har brugeren liket
+      const likeDocRef = doc(db, 'entries', entryId, 'likes', user.uid);
+      try {
+        const snap = await (await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')).getDoc(likeDocRef);
+        return snap.exists();
+      } catch { return false; }
+    }
+
+    async function toggleLike(entryId, btnEl) {
+      const user = auth.currentUser;
+      if (!user) { alert('Log ind med Google for at like.'); return; }
+      const likeDocRef = doc(db, 'entries', entryId, 'likes', user.uid);
+      const { setDoc, deleteDoc: delDoc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      try {
+        const cur = await getDoc(likeDocRef);
+        if (cur.exists()) {
+          await delDoc(likeDocRef); // fjern like
+        } else {
+          await setDoc(likeDocRef, { uid: user.uid, created: Date.now() });
+        }
+        // Opdatér tælling lokalt
+        await refreshAllLikeCounts();
+        // Opdatér knap-UI
+        updateLikeButtonState(entryId, btnEl);
+        // Re-render rækker hvis vi sorterer efter likes
+        if (sortByLikes) renderTable(document.getElementById('search').value);
+      } catch (err) {
+        alert('Kunne ikke opdatere like: ' + (err?.message||err));
+      }
+    }
+
+    async function updateLikeButtonState(entryId, btnEl) {
+      const liked = await hasUserLiked(entryId);
+      const item = entries.find(x => x.id === entryId);
+      const count = item?._likes ?? 0;
+      btnEl.dataset.liked = liked ? '1' : '0';
+      btnEl.innerHTML = liked
+        ? `❤️ <span class="tabular-nums">${count}</span>`
+        : `🤍 <span class="tabular-nums">${count}</span>`;
+      btnEl.title = liked ? 'Fjern like' : 'Giv like';
+    }
+
+    // ===== Table render =====
+    function renderTable(filter = '') {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+
+      let data = [...entries];
+      // sortering
+      if (sortByLikes) {
+        data.sort((a,b) => (b._likes||0) - (a._likes||0));
+      } else {
+        data.sort((a,b) => sortDesc ? b.speed - a.speed : a.speed - b.speed);
+      }
+
+      const q = filter.trim().toLowerCase();
+      if (q) {
+        data = data.filter(e => (
+          (e.rider||'').toLowerCase().includes(q) ||
+          (e.scooter||'').toLowerCase().includes(q) ||
+          (e.mods||'').toLowerCase().includes(q) ||
+          (e.location||'').toLowerCase().includes(q)
+        ));
+      }
+
+      data.forEach((e, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-zinc-900/40';
+        const actionDel = adminMode
+          ? `<button data-id="${e.id}" class="delBtn text-xs rounded-lg border border-red-800/70 px-2 py-1 text-red-300 hover:bg-red-900/30">Slet</button>`
+          : '<span class="text-zinc-500 text-xs">—</span>';
+        const likeBtnId = `like-${e.id}`;
+        tr.innerHTML = `
+          <td class="px-4 py-3 text-zinc-400">${idx+1}</td>
+          <td class="px-4 py-3 font-medium">${escapeHtml(e.rider||'')}</td>
+          <td class="px-4 py-3">${escapeHtml(e.scooter||'')}</td>
+          <td class="px-4 py-3 text-zinc-300">${escapeHtml(e.mods||'')}</td>
+          <td class="px-4 py-3 font-semibold">${Number(e.speed||0).toFixed(1)}</td>
+          <td class="px-4 py-3">
+            <button id="${likeBtnId}" class="text-xs rounded-lg border border-zinc-700 px-2 py-1 hover:bg-zinc-900/40">🤍 <span class="tabular-nums">${e._likes||0}</span></button>
+          </td>
+          <td class="px-4 py-3">
+            ${e.evidence ? `<a href="${escapeAttr(e.evidence)}" target="_blank" class="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs ${isTrustedLink(e.evidence) ? 'border-emerald-700 text-emerald-300' : 'border-yellow-700 text-yellow-300'} hover:underline">${isTrustedLink(e.evidence) ? 'Verificeret' : 'Uverificeret'}</a>` : '<span class="text-zinc-500 text-xs">Intet link</span>'}
+          </td>
+          <td class="px-4 py-3">${formatDate(e.date)}</td>
+          <td class="px-4 py-3">${escapeHtml(e.location||'')}</td>
+          <td class="px-4 py-3">${actionDel}</td>
+        `;
+        tbody.appendChild(tr);
+
+        // attach like handler
+        const likeBtn = document.getElementById(likeBtnId);
+        likeBtn.addEventListener('click', () => toggleLike(e.id, likeBtn));
+        // init state
+        updateLikeButtonState(e.id, likeBtn);
+      });
+
+      // attach delete listeners (admin only)
+      if (adminMode) {
+        document.querySelectorAll('.delBtn').forEach(btn => {
+          btn.addEventListener('click', async (ev) => {
+            const id = ev.currentTarget.getAttribute('data-id');
+            if (!adminMode) return;
+            if (!confirm('Slet denne rekord?')) return;
+            try { await deleteDoc(doc(db, 'entries', id)); } catch (err) { alert('Kunne ikke slette: ' + (err?.message||err)); }
+          });
+        });
+      }
+    }
+
+    // ===== Form & controls =====
+    document.getElementById('addForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!adminMode) { alert('Kun admin kan tilføje.'); return; }
+      const rider = document.getElementById('rider').value.trim();
+      const scooter = document.getElementById('scooter').value.trim();
+      const mods = document.getElementById('mods').value.trim();
+      const speed = parseFloat(document.getElementById('speed').value);
+      const evidence = document.getElementById('evidence').value.trim();
+      const date = document.getElementById('date').value;
+      const location = document.getElementById('location').value.trim();
+
+      if (!rider || !scooter || !Number.isFinite(speed)) { alert('Udfyld Fører, Scooter og Topfart.'); return; }
+      if (speed <= 0 || speed > 400) { alert('Topfart ser forkert ud (1–400 km/t).'); return; }
+      if (evidence && !isValidUrl(evidence)) { alert('Bevis-linket er ikke en gyldig URL.'); return; }
+
+      try {
+        await addDoc(entriesRef, { rider, scooter, mods, speed: Number(speed), evidence, date, location, created: Date.now() });
+        (e.target).reset();
+      } catch (err) { alert('Kunne ikke gemme: ' + (err?.message||err)); }
+    });
+
+    function isValidUrl(u) { try { new URL(u); return true; } catch { return false; } }
+
+    document.getElementById('sortSpeedBtn').addEventListener('click', () => {
+      sortByLikes = false; // skift til fart-sortering
+      sortDesc = !sortDesc;
+      document.getElementById('sortSpeedBtn').textContent = `Sortér: Fart ${sortDesc ? '↓' : '↑'}`;
+      renderTable(document.getElementById('search').value);
+    });
+    document.getElementById('sortLikesBtn').addEventListener('click', () => {
+      sortByLikes = true;
+      renderTable(document.getElementById('search').value);
+    });
+    document.getElementById('speedHeader').addEventListener('click', () => {
+      sortByLikes = false; sortDesc = !sortDesc; renderTable(document.getElementById('search').value);
+    });
+    document.getElementById('search').addEventListener('input', (e) => { renderTable(e.target.value); });
+
+    document.getElementById('clearBtn').addEventListener('click', async () => {
+      if (!adminMode) return;
+      if (!confirm('SLET ALT? Dette fjerner alle rekorder i Firebase.')) return;
+      try {
+        const snap = await getDocs(entriesRef);
+        await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'entries', d.id))));
+      } catch (err) { alert('Kunne ikke rydde alt: ' + (err?.message||err)); }
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'scooter-leaderboard.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    });
+
+    document.getElementById('importInput').addEventListener('change', async (ev) => {
+      if (!adminMode) { alert('Kun admin kan importere.'); ev.target.value=''; return; }
+      const file = ev.target.files?.[0]; if (!file) return;
+      const text = await file.text();
+      try {
+        const data = JSON.parse(text);
+        if (!Array.isArray(data)) throw new Error('JSON skal være en liste.');
+        for (const x of data) {
+          const item = {
+            rider: String(x.rider||'Ukendt'),
+            scooter: String(x.scooter||'Ukendt'),
+            mods: String(x.mods||''),
+            speed: Number(x.speed||0),
+            evidence: x.evidence ? String(x.evidence) : '',
+            date: x.date ? String(x.date) : '',
+            location: x.location ? String(x.location) : '',
+            created: Number(x.created || Date.now())
+          };
+          if (Number.isFinite(item.speed) && item.speed>0) {
+            await addDoc(entriesRef, item);
+          }
+        }
+      } catch (err) {
+        alert('Kunne ikke importere JSON: ' + err.message);
+      } finally { ev.target.value = ''; }
+    });
+  </script>
+
+  <!-- Firestore Rules (kopiér til Firestore Rules i Firebase Console)
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      match /entries/{doc} {
+        allow read: if true; // alle må læse entries
+        allow write: if request.auth != null && request.auth.uid == 'YOUR_ADMIN_UID'; // admin kan create/update/delete entries
+
+        // Likes som subcollection: entries/{doc}/likes/{uid}
+        match /likes/{uid} {
+          allow read: if true; // alle må læse likes
+          // Kun den aktuelle bruger må oprette/slette sit eget like-dokument
+          allow create, delete: if request.auth != null && request.auth.uid == uid;
+          // Forbyd updates (vi bruger kun create/delete)
+          allow update: if false;
+        }
+      }
+    }
+  }
+  -->
+</body>
+</html>
