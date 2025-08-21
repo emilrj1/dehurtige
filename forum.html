@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Forum – Del din scooter</title>
+  <meta name="description" content="Del din scooter: opslag med billed-links, titel og beskrivelse. Kun Google-loggede brugere kan poste. Data i Cloud Firestore." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.08); }
+    .hidden { display: none; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .img-cover { object-fit: cover; }
+    .like-btn[data-liked="1"] { border-color: rgb(220 38 38); background: rgba(220,38,38,.08); }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/70 glass">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
+      <a href="/index.html" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500">← Tilbage</a>
+      <div class="text-xl font-extrabold tracking-tight">Forum – Del din scooter</div>
+      <div class="ml-auto flex items-center gap-2">
+        <button id="googleLoginBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500">Login (Google)</button>
+        <button id="logoutBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 hidden">Log ud</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-8">
+
+    <!-- Info -->
+    <section class="mb-6 p-4 rounded-2xl border border-zinc-800 bg-zinc-900/40">
+      <h1 class="text-2xl font-black mb-2">Del din scooter</h1>
+      <p class="text-zinc-300">Post med <b>billed-links</b> (fx Imgur/Discord/Gyazo), en titel og en kort beskrivelse. Vi gemmer kun tekst og links i <b>Cloud Firestore</b>.</p>
+    </section>
+
+    <!-- Create Post (only when logged in) -->
+    <section id="createSection" class="mb-10 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/40 hidden">
+      <h2 class="text-xl font-bold mb-3">Opret opslag</h2>
+
+      <form id="postForm" class="grid gap-4">
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="title">Titel *</label>
+          <input id="title" required maxlength="80" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="Fx Min PGO Hot 50 (Stage6 setup)" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-1" for="bio">Beskrivelse *</label>
+          <textarea id="bio" required maxlength="1000" rows="4" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="Skriv lidt om din scooter, setup, topfart, osv."></textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-1">Billed-links (1–6, ét pr. linje) *</label>
+          <textarea id="imageLinks" required rows="3" class="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="https://i.imgur.com/xxxx.jpg&#10;https://cdn.discordapp.com/attachments/....png"></textarea>
+          <p class="text-xs text-zinc-400 mt-1">Kun <code>http(s)</code> URL’er.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button class="rounded-xl border border-emerald-700 px-4 py-2 hover:bg-emerald-900/30">Post</button>
+          <button id="previewBtn" type="button" class="rounded-xl border border-zinc-700 px-3 py-2 hover:bg-zinc-900/40">Forhåndsvis</button>
+          <span id="formMsg" class="text-sm text-zinc-300"></span>
+        </div>
+      </form>
+
+      <!-- Preview -->
+      <div id="preview" class="mt-6 hidden">
+        <div class="text-sm font-semibold mb-2 text-zinc-300">Forhåndsvisning</div>
+        <div class="rounded-2xl border border-zinc-800 overflow-hidden">
+          <div class="grid md:grid-cols-3">
+            <img id="previewImg" class="md:col-span-1 w-full h-48 img-cover bg-zinc-800" alt="">
+            <div class="md:col-span-2 p-4">
+              <div class="text-lg font-bold" id="previewTitle"></div>
+              <div class="text-sm text-zinc-400 mt-1">af <span id="previewAuthor">—</span></div>
+              <p class="mt-2 text-zinc-200" id="previewBio"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Posts list -->
+    <section>
+      <div class="mb-3 flex items-center gap-3">
+        <input id="search" class="w-full md:w-80 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2" placeholder="Søg titel / forfatter..." />
+        <button id="refreshBtn" class="rounded-xl border border-zinc-700 px-3 py-2 hover:bg-zinc-900/40">Opdatér</button>
+      </div>
+
+      <div id="grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+      <div class="mt-6 flex justify-center">
+        <button id="loadMoreBtn" class="rounded-xl border border-zinc-700 px-4 py-2 hover:bg-zinc-900/40 hidden">Hent flere</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <!-- Vigtigt: modal skal være FLEX når den er synlig, så den står i midten -->
+  <div id="modal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4">
+    <div class="max-w-3xl w-full rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
+      <div class="flex items-center justify-between p-3 border-b border-zinc-800">
+        <div class="flex items-center gap-3">
+          <div class="font-bold" id="modalTitle">Opslag</div>
+          <button id="modalLikeBtn" class="like-btn rounded-lg border border-zinc-700 px-2 py-1 text-sm">🤍 <span id="modalLikeCount" class="tabular-nums">0</span></button>
+        </div>
+        <button id="closeModal" class="rounded-lg border border-zinc-700 px-2 py-1 hover:bg-zinc-900/40">Luk</button>
+      </div>
+      <div class="grid md:grid-cols-2">
+        <div class="p-3 space-y-2 max-h-[70vh] overflow-auto" id="modalImages"></div>
+        <div class="p-4">
+          <div class="text-sm text-zinc-400 mb-1" id="modalMeta"></div>
+          <p id="modalBio" class="whitespace-pre-wrap"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // ===== Firebase setup =====
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import {
+      getFirestore, collection, addDoc, doc, getDoc, getDocs, query, orderBy, limit, startAfter,
+      getCountFromServer, setDoc, deleteDoc
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import {
+      getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut
+    } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+    // === Brug din eksisterende config (samme som index.html) ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyCTd9LEy6TJI5ktK6r_Pn1jiahbB-rl4-0",
+      authDomain: "scooter-f404c.firebaseapp.com",
+      databaseURL: "https://scooter-f404c-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "scooter-f404c",
+      storageBucket: "scooter-f404c.firebasestorage.app",
+      messagingSenderId: "717023125803",
+      appId: "1:717023125803:web:59a76dbc983e2ead43656e",
+      measurementId: "G-9CTP8W3SSJ"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
+
+    // ===== UI state =====
+    let lastDocRef = null;            // pagination
+    const PAGE = 12;                  // cards per page
+    let cachedPosts = [];             // for client-side search
+    let likeCache = new Map();        // postId -> count
+    let currentModalPostId = null;
+
+    // ===== Auth UI =====
+    const createSection = document.getElementById('createSection');
+    const loginBtn = document.getElementById('googleLoginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    onAuthStateChanged(auth, (user) => {
+      const loggedIn = !!user;
+      loginBtn.classList.toggle('hidden', loggedIn);
+      logoutBtn.classList.toggle('hidden', !loggedIn);
+      createSection.classList.toggle('hidden', !loggedIn);
+      // opdatér like-knappernes state når login skifter
+      refreshAllCardLikes();
+      if (currentModalPostId) updateModalLikeState(currentModalPostId);
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      try { await signInWithPopup(auth, googleProvider); }
+      catch (e) { alert('Google login fejlede: ' + (e?.message || e)); }
+    });
+    logoutBtn.addEventListener('click', async () => { try { await signOut(auth); } catch {} });
+
+    // ===== Helpers =====
+    function isHttpUrl(u) { try { const x = new URL(u); return x.protocol === 'http:' || x.protocol === 'https:'; } catch { return false; } }
+    function cleanImages(text) {
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const uniq = Array.from(new Set(lines));
+      if (uniq.length < 1 || uniq.length > 6) throw new Error('Angiv 1–6 billed-links.');
+      if (!uniq.every(isHttpUrl)) throw new Error('Kun gyldige http(s) URL’er.');
+      return uniq;
+    }
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function formatDate(ts){ try{ return new Date(ts).toLocaleString('da-DK'); }catch{ return '—'; } }
+
+    // ===== Likes helpers =====
+    async function getLikesCount(postId){
+      try{
+        const likesCol = collection(db,'posts',postId,'likes');
+        const agg = await getCountFromServer(likesCol);
+        const n = agg.data().count || 0;
+        likeCache.set(postId, n);
+        return n;
+      }catch{ return 0; }
+    }
+
+    async function hasUserLiked(postId){
+      const user = auth.currentUser; if(!user) return false;
+      try{
+        const ref = doc(db,'posts',postId,'likes',user.uid);
+        const snap = await getDoc(ref);
+        return snap.exists();
+      }catch{ return false; }
+    }
+
+    async function toggleLike(postId, btnEls = []){
+      const user = auth.currentUser;
+      if(!user){ alert('Log ind med Google for at like.'); return; }
+      const likeRef = doc(db,'posts',postId,'likes',user.uid);
+      try{
+        const cur = await getDoc(likeRef);
+        if(cur.exists()){
+          await deleteDoc(likeRef);
+        }else{
+          await setDoc(likeRef, { uid: user.uid, created: Date.now() });
+        }
+        const n = await getLikesCount(postId);
+        const likedNow = await hasUserLiked(postId);
+        // opdatér UI
+        btnEls.forEach(el=>{
+          el.dataset.liked = likedNow ? '1' : '0';
+          el.innerHTML = (likedNow ? '❤️' : '🤍') + ` <span class="tabular-nums">${n}</span>`;
+          el.title = likedNow ? 'Fjern like' : 'Giv like';
+        });
+      }catch(e){
+        alert('Kunne ikke opdatere like: ' + (e?.message||e));
+      }
+    }
+
+    async function updateLikeButtonState(postId, btnEl){
+      const [liked, count] = await Promise.all([hasUserLiked(postId), likeCache.has(postId)? Promise.resolve(likeCache.get(postId)) : getLikesCount(postId)]);
+      btnEl.dataset.liked = liked ? '1' : '0';
+      btnEl.innerHTML = (liked ? '❤️' : '🤍') + ` <span class="tabular-nums">${count}</span>`;
+      btnEl.title = liked ? 'Fjern like' : 'Giv like';
+    }
+
+    async function refreshAllCardLikes(){
+      // Hent counts for alle viste kort (uden at spamme unødigt)
+      const ids = Array.from(document.querySelectorAll('[data-like-post]')).map(el=>el.getAttribute('data-like-post'));
+      await Promise.all(ids.map(id=> getLikesCount(id)));
+      document.querySelectorAll('[data-like-post]').forEach(el=>{
+        const id = el.getAttribute('data-like-post');
+        updateLikeButtonState(id, el);
+      });
+    }
+
+    // ===== Create post =====
+    const form = document.getElementById('postForm');
+    const formMsg = document.getElementById('formMsg');
+    const preview = document.getElementById('preview');
+    const previewBtn = document.getElementById('previewBtn');
+
+    previewBtn.addEventListener('click', () => {
+      const title = (document.getElementById('title').value || '').trim();
+      const bio = (document.getElementById('bio').value || '').trim();
+      const links = (document.getElementById('imageLinks').value || '').trim();
+      try {
+        const imgs = cleanImages(links);
+        document.getElementById('previewImg').src = imgs[0];
+        document.getElementById('previewTitle').textContent = title || '—';
+        document.getElementById('previewBio').textContent = bio || '—';
+        document.getElementById('previewAuthor').textContent = auth.currentUser?.displayName || 'Anonym';
+        preview.classList.remove('hidden');
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formMsg.textContent = '';
+      const user = auth.currentUser;
+      if (!user) { alert('Du skal være logget ind.'); return; }
+
+      const title = (document.getElementById('title').value || '').trim();
+      const bio = (document.getElementById('bio').value || '').trim();
+      const linksRaw = (document.getElementById('imageLinks').value || '').trim();
+
+      if (!title || !bio) { alert('Titel og beskrivelse er påkrævet.'); return; }
+
+      let images = [];
+      try { images = cleanImages(linksRaw); }
+      catch (err) { alert(err.message); return; }
+
+      const payload = {
+        title: title.slice(0,80),
+        bio: bio.slice(0,1000),
+        images,
+        authorUid: user.uid,
+        authorName: user.displayName || 'Anonym',
+        authorPhoto: user.photoURL || '',
+        created: Date.now()
+      };
+
+      try {
+        await addDoc(collection(db, 'posts'), payload);
+        form.reset();
+        preview.classList.add('hidden');
+        formMsg.textContent = 'Opslag oprettet ✅';
+        await loadFirstPage(true);
+      } catch (err) {
+        alert('Kunne ikke oprette opslag: ' + (err?.message || err));
+      }
+    });
+
+    // ===== Render cards =====
+    const grid = document.getElementById('grid');
+
+    function card(post, id){
+      const cover = post.images?.[0] || '';
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <article class="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden hover:border-zinc-700 transition">
+          <div class="aspect-[16/10] bg-zinc-800">
+            <img src="${esc(cover)}" alt="" class="w-full h-full img-cover" loading="lazy"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22250%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%23171717%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23aaaaaa%22 font-size=%2220%22%3EIntet billede%3C/text%3E%3C/svg%3E'">
+          </div>
+          <div class="p-4">
+            <h3 class="font-bold text-lg mb-1 line-clamp-2">${esc(post.title||'Untitled')}</h3>
+            <div class="text-sm text-zinc-400 mb-2">af ${esc(post.authorName||'—')} • ${formatDate(post.created)}</div>
+            <p class="text-sm text-zinc-200 line-clamp-2">${esc(post.bio||'')}</p>
+            <div class="mt-3 flex items-center justify-between">
+              <button data-id="${id}" class="openBtn rounded-xl border border-zinc-700 px-3 py-1.5 hover:bg-zinc-900/40">Åbn</button>
+              <button data-like-post="${id}" class="like-btn rounded-xl border border-zinc-700 px-3 py-1.5">🤍 <span class="tabular-nums">0</span></button>
+            </div>
+          </div>
+        </article>`;
+      return div.firstElementChild;
+    }
+
+    function hookOpenButtons(){
+      grid.querySelectorAll('.openBtn').forEach(btn=>{
+        btn.addEventListener('click', ()=> openPost(btn.getAttribute('data-id')));
+      });
+      grid.querySelectorAll('[data-like-post]').forEach(btn=>{
+        const postId = btn.getAttribute('data-like-post');
+        btn.addEventListener('click', ()=> toggleLike(postId, [btn]));
+      });
+    }
+
+    // ===== Modal =====
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMeta  = document.getElementById('modalMeta');
+    const modalBio   = document.getElementById('modalBio');
+    const modalImages= document.getElementById('modalImages');
+    const modalLikeBtn = document.getElementById('modalLikeBtn');
+    const modalLikeCount = document.getElementById('modalLikeCount');
+
+    function showModal(){
+      modal.classList.remove('hidden');
+      // sørg for at den er centreret: display:flex
+      if(!modal.classList.contains('flex')) modal.classList.add('flex');
+    }
+
+    function hideModal(){
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      currentModalPostId = null;
+    }
+
+    document.getElementById('closeModal').addEventListener('click', hideModal);
+    modal.addEventListener('click', (e)=>{ if(e.target===modal) hideModal(); });
+
+    async function updateModalLikeState(postId){
+      const [liked, count] = await Promise.all([hasUserLiked(postId), likeCache.has(postId)? Promise.resolve(likeCache.get(postId)) : getLikesCount(postId)]);
+      modalLikeBtn.dataset.liked = liked ? '1' : '0';
+      modalLikeBtn.innerHTML = (liked ? '❤️' : '🤍') + ` <span class="tabular-nums" id="modalLikeCount">${count}</span>`;
+      modalLikeBtn.title = liked ? 'Fjern like' : 'Giv like';
+    }
+
+    async function openPost(id){
+      try{
+        const snap = await getDoc(doc(db,'posts',id));
+        if(!snap.exists()) return;
+        const p = snap.data();
+        currentModalPostId = id;
+        modalTitle.textContent = p.title || 'Opslag';
+        modalMeta.textContent  = `af ${p.authorName||'—'} • ${formatDate(p.created)}`;
+        modalBio.textContent   = p.bio || '';
+        modalImages.innerHTML  = '';
+        (p.images||[]).forEach(url=>{
+          const img = document.createElement('img');
+          img.src = url; img.alt = ''; img.loading='lazy';
+          img.className = 'w-full rounded-xl border border-zinc-800';
+          img.onerror = ()=>{ img.replaceWith(Object.assign(document.createElement('div'),{className:'w-full h-40 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-400 text-sm',textContent:'Billede kunne ikke indlæses'})); };
+          const wrap = document.createElement('div');
+          wrap.appendChild(img);
+          modalImages.appendChild(wrap);
+        });
+        // hook like i modal
+        modalLikeBtn.onclick = ()=> toggleLike(id, [modalLikeBtn, ...document.querySelectorAll(`[data-like-post="${id}"]`)]);
+        await updateModalLikeState(id);
+        showModal();
+      }catch(e){
+        alert('Kunne ikke åbne opslag: ' + (e?.message||e));
+      }
+    }
+
+    // ===== Load & search =====
+    async function loadFirstPage(reset=false){
+      if(reset){ grid.innerHTML=''; lastDocRef=null; cachedPosts=[]; }
+      let q = query(collection(db,'posts'), orderBy('created','desc'), limit(PAGE));
+      if(lastDocRef){ q = query(collection(db,'posts'), orderBy('created','desc'), startAfter(lastDocRef), limit(PAGE)); }
+      const snap = await getDocs(q);
+      if(snap.docs.length){
+        lastDocRef = snap.docs[snap.docs.length-1];
+        snap.docs.forEach(d => {
+          const p = d.data();
+          cachedPosts.push({id:d.id, ...p});
+          grid.appendChild(card(p, d.id));
+        });
+      }
+      document.getElementById('loadMoreBtn').classList.toggle('hidden', snap.docs.length < PAGE);
+      hookOpenButtons();
+      await refreshAllCardLikes();
+    }
+
+    document.getElementById('loadMoreBtn').addEventListener('click', ()=> loadFirstPage(false));
+    document.getElementById('refreshBtn').addEventListener('click', ()=> loadFirstPage(true));
+
+    document.getElementById('search').addEventListener('input', (e)=>{
+      const q = (e.target.value||'').toLowerCase().trim();
+      grid.innerHTML = '';
+      const items = q ? cachedPosts.filter(p => (p.title||'').toLowerCase().includes(q) || (p.authorName||'').toLowerCase().includes(q)) : cachedPosts;
+      items.forEach(p => grid.appendChild(card(p, p.id)));
+      hookOpenButtons();
+      refreshAllCardLikes();
+    });
+
+    // init
+    await loadFirstPage(true);
+  </script>
+
+  <!-- Firestore Rules – kopier til Firestore (Rules) -->
+  <!--
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      // Forum posts
+      match /posts/{postId} {
+        allow read: if true;
+        allow create: if request.auth != null
+          && request.resource.data.title is string
+          && request.resource.data.bio is string
+          && request.resource.data.images is list
+          && request.resource.data.images.size() >= 1
+          && request.resource.data.images.size() <= 6
+          && request.resource.data.images.hasOnly([x in request.resource.data.images where
+                x is string && (x.startsWith('http://') || x.startsWith('https://'))
+             ])
+          && request.resource.data.created is number
+          && request.resource.data.authorUid == request.auth.uid;
+        allow update, delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+
+        // Likes som subcollection: ét like pr. bruger (doc id = uid)
+        match /likes/{uid} {
+          allow read: if true;
+          allow create, delete: if request.auth != null && request.auth.uid == uid;
+          allow update: if false;
+        }
+      }
+    }
+  }
+  -->
+</body>
+</html>
