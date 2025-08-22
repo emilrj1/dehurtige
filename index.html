@@ -14,6 +14,28 @@
     .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.08); }
     .hidden { display: none; }
     .btn { @apply rounded-xl border border-zinc-700 px-3 py-2 hover:border-zinc-500; }
+
+    /* Marquee banner */
+    .marquee {
+      position: relative;
+      overflow: hidden;
+      white-space: nowrap;
+      mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+      -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+    }
+    .marquee__inner {
+      display: inline-flex;
+      gap: 2rem;
+      align-items: center;
+      animation: marquee 18s linear infinite;
+      will-change: transform;
+    }
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+    }
+    .ticker-chip { @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-white/15 bg-white/10 backdrop-blur; }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-100">
@@ -26,10 +48,13 @@
         <span id="adminBadge" class="text-xs rounded-full border border-emerald-700/70 px-2 py-1 text-emerald-300 hidden">ADMIN</span>
         <button id="langBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition" title="Skift sprog">DA</button>
         <button id="googleLoginBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition" data-i18n="login">Login (Google)</button>
-        <a href="forum.html" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500">
+        <button id="adminLoginBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition" title="Kun til admin fallback (email/password)">Admin login</button>
+                <a href="forum.html" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500">
   Forum
-</a>
+</a> 
         <button id="logoutBtn" class="px-3 py-1.5 text-sm rounded-xl border border-zinc-700 hover:border-zinc-500 transition hidden" data-i18n="logout">Log ud</button>
+          <input id="importInput" type="file" accept="application/json" class="hidden" />
+        </label>
       </div>
     </div>
   </header>
@@ -121,7 +146,7 @@
 
     <!-- Footer -->
     <footer class="pb-12 text-center text-sm text-zinc-400">
-      Lavet af Lean.
+      Lavet af EmilRJ.
     </footer>
   </main>
 
@@ -162,10 +187,12 @@
     // ===== i18n =====
     const T = {
       da: {
-        login: 'Login (Google)', logout: 'Log ud', hero: 'Her kan du se <span class="font-semibold">de hurtigeste</span> knallerter!', verified:'Verificeret bevis', unverified:'Link mangler / uverificeret', searchLabel:'Søg', searchPh:'Søg på fører, scooter, HK, lokation...', sortSpeed:'Sortér: Fart ↓', sortLikes:'Sortér: Likes', clearAll:'Ryd alt (admin)', rider:'Fører', scooter:'Scooter', speedometer:'Speedometer', topspeed:'Topfart (km/t)', likes:'Likes', evidence:'Bevis', location:'Lokation', action:'Handling', addTitle:'Tilføj ny rekord (admin)', riderReq:'Fører *', riderPh:'Navn eller nick', scooterReq:'Scooter *', scooterPh:'Model (fx PGO Hot 50)', hkPh:'fx 12.5', topspeedReq:'Topfart (km/t) *', speedPh:'fx 112.5', evidenceLink:'Bevis-link', evidencePh:'YouTube, GPS-log, billede...', locationLabel:'Lokation', locationPh:'By / strækning', addBtn:'Tilføj'
+        login: 'Login (Google)', logout: 'Log ud', hero: 'Her kan du se <span class="font-semibold">de hurtigeste</span> knallerter!', verified:'Verificeret bevis', unverified:'Link mangler / uverificeret', searchLabel:'Søg', searchPh:'Søg på fører, scooter, HK, lokation...', sortSpeed:'Sortér: Fart ↓', sortLikes:'Sortér: Likes', clearAll:'Ryd alt (admin)', rider:'Fører', scooter:'Scooter', speedometer:'Speedometer', topspeed:'Topfart (km/t)', likes:'Likes', evidence:'Bevis', location:'Lokation', action:'Handling', addTitle:'Tilføj ny rekord (admin)', riderReq:'Fører *', riderPh:'Navn eller nick', scooterReq:'Scooter *', scooterPh:'Model (fx PGO Hot 50)', hkPh:'fx 12.5', topspeedReq:'Topfart (km/t) *', speedPh:'fx 112.5', evidenceLink:'Bevis-link', evidencePh:'YouTube, GPS-log, billede...', locationLabel:'Lokation', locationPh:'By / strækning', addBtn:'Tilføj',
+        adText:'Køb en annonce', adUrl:'#'
       },
       en: {
-        login: 'Login (Google)', logout: 'Log out', hero: 'See the <span class="font-semibold">fastest</span> mopeds here!', verified:'Verified proof', unverified:'No link / unverified', searchLabel:'Search', searchPh:'Search rider, scooter, HP, location...', sortSpeed:'Sort: Speed ↓', sortLikes:'Sort: Likes', clearAll:'Clear all (admin)', rider:'Rider', scooter:'Scooter', speedometer:'Speedometer', topspeed:'Top speed (km/h)', likes:'Likes', evidence:'Proof', location:'Location', action:'Action', addTitle:'Add new record (admin)', riderReq:'Rider *', riderPh:'Name or nick', scooterReq:'Scooter *', scooterPh:'Model (e.g. PGO Hot 50)', hkPh:'e.g. 12.5', topspeedReq:'Top speed (km/h) *', speedPh:'e.g. 112.5', evidenceLink:'Proof link', evidencePh:'YouTube, GPS log, photo...', locationLabel:'Location', locationPh:'City / stretch', addBtn:'Add'
+        login: 'Login (Google)', logout: 'Log out', hero: 'See the <span class=\"font-semibold\">fastest</span> mopeds here!', verified:'Verified proof', unverified:'No link / unverified', searchLabel:'Search', searchPh:'Search rider, scooter, HP, location...', sortSpeed:'Sort: Speed ↓', sortLikes:'Sort: Likes', clearAll:'Clear all (admin)', rider:'Rider', scooter:'Scooter', speedometer:'Speedometer', topspeed:'Top speed (km/h)', likes:'Likes', evidence:'Proof', location:'Location', action:'Action', addTitle:'Add new record (admin)', riderReq:'Rider *', riderPh:'Name or nick', scooterReq:'Scooter *', scooterPh:'Model (e.g. PGO Hot 50)', hkPh:'e.g. 12.5', topspeedReq:'Top speed (km/h) *', speedPh:'e.g. 112.5', evidenceLink:'Proof link', evidencePh:'YouTube, GPS log, photo...', locationLabel:'Location', locationPh:'City / stretch', addBtn:'Add',
+        adText:'Buy an advertisement', adUrl:'#'
       }
     };
 
@@ -471,8 +498,50 @@
       } finally { ev.target.value = ''; }
     });
 
+    // Ticker controls
+    function renderTicker(){
+      const dict = T[lang];
+      const text = dict.adText;
+      const url = dict.adUrl;
+      for (let i=1;i<=4;i++){
+        const t = document.getElementById('adTickerText'+i);
+        if (t) t.textContent = text;
+        const link = document.getElementById('adTickerLink'+i);
+        if (link) link.href = url || '#';
+      }
+      const hidden = localStorage.getItem('adTickerHidden') === '1';
+      const bar = document.getElementById('adTicker');
+      if (bar) bar.style.display = hidden ? 'none' : '';
+    }
+    const adClose = document.getElementById('adTickerClose');
+    if (adClose) adClose.addEventListener('click', ()=>{
+      localStorage.setItem('adTickerHidden','1');
+      const bar = document.getElementById('adTicker');
+      if (bar) bar.style.display = 'none';
+    });
+
+    function ensureTickerDuplication(){
+      const inner = document.querySelector('.marquee__inner');
+      if (!inner || inner.dataset.duped === '1') return;
+      // duplicate children once so we have a seamless loop
+      inner.innerHTML = inner.innerHTML + inner.innerHTML;
+      inner.dataset.duped = '1';
+      setTickerDuration();
+    }
+    function setTickerDuration(){
+      const inner = document.querySelector('.marquee__inner');
+      if (!inner) return;
+      // duration scales with content width (bigger = slower scroll)
+      const px = inner.scrollWidth;
+      const seconds = Math.max(12, Math.round(px / 140));
+      inner.style.animationDuration = seconds + 's';
+    }
+    window.addEventListener('resize', setTickerDuration);
+
     // init
     applyI18n();
+    renderTicker();
+    ensureTickerDuplication();
   </script>
 
   <!-- Firestore Rules (kopiér til Firestore Rules i Firebase Console)
@@ -494,6 +563,3 @@
   
 </body>
 </html>
-
-
-
